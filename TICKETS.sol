@@ -1935,8 +1935,9 @@ contract TICKETS is ERC721, Ownable {
         return _callerAddr == _msgSender();
     }
 
-    // Holding a TICKETS token gives right to mint a PFPNFT. Set this address
-    function setCallerAddr(address _callr) public onlyOwner {
+    // Holding a TICKETS token gives right to mint a MOJI CLUB.
+    // Can only be set once.
+    function setCallerAddr(address _callr) public {
         require(_callerAddr == address(0), "Caller has been set already");
         _callerAddr = _callr;
     }

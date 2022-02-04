@@ -1977,9 +1977,10 @@ abstract contract RewardableERC721 is ERC721, Ownable {
     }
 
     function _rewardableCanClaim(uint256 tokenId) internal view returns(bool) {
-        require(block.timestamp >= RewardableTimestamp(tokenId),"Need to wait to claim");
-        require(_GEN0_Max_Id > tokenId,"Gen1 NFTs are not eligible to mint rewards");
-        require(ownerOf(tokenId) == _msgSender(),"Only holder of Token can claim");
+        require(totalSupply()>=_GEN0_Max_Id, "Rewards will be available once Gen0 solds out");
+        require(block.timestamp >= RewardableTimestamp(tokenId), "Need to wait to claim");
+        require(_GEN0_Max_Id > tokenId, "Gen1 NFTs are not eligible to mint rewards");
+        require(ownerOf(tokenId) == _msgSender(), "Only holder of Token can claim");
         return true;
     }
 
@@ -2010,11 +2011,11 @@ contract MOJICLUB is RewardableERC721, Whitelist {
     uint256 public constant PRICE_ETH = 90000000000000000; //0.09 ETH
     uint256 public constant MAX_MINT = 3;
 
-    bool private _SALE_DATE_DEFINED = false;
     bool private _SALE_PAUSED = false;
     uint256 public WL_MINT_TIMESTAMP;
     uint256 public MINT_TIMESTAMP;
     uint256 public REVEAL_TIMESTAMP;
+    string _preRevealUrl;
 
     ITICKETS public _tickets;
 
@@ -2022,6 +2023,7 @@ contract MOJICLUB is RewardableERC721, Whitelist {
     constructor(address tickets_addr, uint256 supp) ERC721("Moji Club", "MJC") {
         _GEN0_Max_Id = supp;
         _tickets = ITICKETS(tickets_addr);
+        _tickets.setCallerAddr(address(this));
     }
 
     // Getters
@@ -2048,11 +2050,16 @@ contract MOJICLUB is RewardableERC721, Whitelist {
 
     // Mints tickets if Moji Club NFTs gives right for a free ticket
     // TODO : tableau d'int en argument
-    function claimTickets(uint256[] calldata tokenIds) public {
+    function claimTickets(uint256[] memory tokenIds) public {
         for (uint i = 0; i < tokenIds.length; i++) {
             _ClaimRewards(tokenIds[i]);
             _tickets.mintTicket(_msgSender(),1);
         }
+    }
+
+    function claimTickets() public {
+        uint256[] memory tkns = holderTokens();
+        claimTickets(tkns);
     }
 
     // Set Listing date of Whitelist mint
@@ -2062,8 +2069,7 @@ contract MOJICLUB is RewardableERC721, Whitelist {
         require(!SaleIsActive(), "Can't postpone : Already released");
         WL_MINT_TIMESTAMP = saleStart;
         MINT_TIMESTAMP = saleStart.add(600); // 10 min after WL sale
-        REVEAL_TIMESTAMP = saleStart.add(86400); // 1 day after public sale
-        _SALE_DATE_DEFINED = true;
+        REVEAL_TIMESTAMP = MINT_TIMESTAMP.add(86400); // 1 day after public sale
     }
 
     function flipSaleState() public onlyOwner {
@@ -2084,6 +2090,20 @@ contract MOJICLUB is RewardableERC721, Whitelist {
         _setBaseURI(baseURI);
     }
 
+    // Set pre-reveal info
+    function setTmpURI(string memory _uri) public onlyOwner {
+        _preRevealUrl = _uri;
+    }
+
+    // If reveal has not happened yet, return the same URL for every token
+    function tokenURI(uint256 tokenId) public view override returns (string memory) {
+        if(block.timestamp<REVEAL_TIMESTAMP) {
+            return _preRevealUrl;
+        } else {
+            return super.tokenURI(tokenId);
+        }
+    }
+
     /**
     * Mints Tokens
     */
@@ -2095,7 +2115,7 @@ contract MOJICLUB is RewardableERC721, Whitelist {
         bool FreeMint = isFreeMintWhitelisted(_msgSender());
 
         // Only allow whitelisted addresses to mint during presale
-        if(SaleIsActive() && block.timestamp < MINT_TIMESTAMP) {
+        if(block.timestamp < MINT_TIMESTAMP) {
             require(Whistelisted || FreeMint, "Only whitelisted can mint for now");
         }
 
@@ -2103,7 +2123,6 @@ contract MOJICLUB is RewardableERC721, Whitelist {
         if(FreeMint){
             require(numberOfTokens == 1, "Can only mint one token for free");
             // Remove user from Free Mint WL as he's using his free mint right now
-            useFreeMint();
         } else {
             require(numberOfTokens <= MAX_MINT, "Can only mint 'MAX_MINT' tokens at a time");
         }
@@ -2112,20 +2131,32 @@ contract MOJICLUB is RewardableERC721, Whitelist {
         bool current_gen0 = totalSupply()<_GEN0_Max_Id;
         if(current_gen0) {
             require(totalSupply().add(numberOfTokens) <= _GEN0_Max_Id, "Purchase would exceed max supply of Gen0 tokens.");
+            
+            // in Gen0, Non-FreeMint user have to send the correct amount of ETH to mint tokens
             if(!FreeMint){
                 require(PRICE_ETH.mul(numberOfTokens) <= msg.value, "Ether value sent is not correct");
             }
         } else {
-            // Gen1 started
+            // in Gen1, Non-FreeMint user have to own as much MJCC NFTs as they want to mint MJC.
+            // MJCC are burnt in the process.
             if(!FreeMint){
                 require(_tickets.balanceOf(_msgSender())>=numberOfTokens,"Not enough tickets to mint");
             }
         }
-        
-        for(uint i = 0; i < numberOfTokens; i++) {
-            if(!current_gen0 && !FreeMint){
-                _tickets.burnTicket(_msgSender(),1);
+
+        // All checks done, 
+        // Remove the Free Mint entry as user is using it right now
+        if(FreeMint){
+            useFreeMint();
+        } else {
+            // In Gen1, MJCC are burnt to mint MJC.
+            if(!current_gen0){
+                _tickets.burnTicket(_msgSender(),numberOfTokens);
             }
+        }
+        
+        // Mint MJC tokens
+        for(uint i = 0; i < numberOfTokens; i++) {
             uint mintIndex = totalSupply();
             _safeMint(_msgSender(), mintIndex);
         }
@@ -2146,4 +2177,5 @@ interface ITICKETS {
     function burnTicket(address holder, uint256 amount) external;
     function mintTicket(address to, uint256 numberOfTokens) external;
     function balanceOf(address holder) external view returns(uint256);
+    function setCallerAddr(address _callr) external;
 }
