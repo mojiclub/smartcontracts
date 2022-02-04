@@ -1966,6 +1966,5 @@ contract TICKETS is ERC721, Ownable {
             uint256 tokenId = tokenOfOwnerByIndex(holder,0);
             _burn(tokenId);
         }
-        
     }
 }
