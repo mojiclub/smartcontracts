@@ -1971,22 +1971,22 @@ abstract contract RewardableERC721 is ERC721, Ownable {
     // Can claim every 30 days by default (24*3600*30 = 2592000)
     uint256 _claimEvery = 2592000;
 
-    // Returns if tokens is eligible for a claim
-    function RewardableCanClaim(uint256 tokenId) public view returns(bool) {
-        bool time_claim = block.timestamp >= RewardableTimestamp(tokenId);
-        bool tokenIsRewardable = _GEN0_Max_Id > tokenId;
-        return (time_claim && tokenIsRewardable);
-    }
-
     // Returns next timestamp at which tokenId becomes eligible for a new claim 
     function RewardableTimestamp(uint256 tokenId) public view returns(uint256) {
         return lastClaimTimeStamp[tokenId].add(_claimEvery);
     }
 
-    function _ResetClaimTimestamp(uint256 tokenId) internal {
+    function _rewardableCanClaim(uint256 tokenId) internal view returns(bool) {
+        require(block.timestamp >= RewardableTimestamp(tokenId),"Need to wait to claim");
+        require(_GEN0_Max_Id > tokenId,"Gen1 NFTs are not eligible to mint rewards");
         require(ownerOf(tokenId) == _msgSender(),"Only holder of Token can claim");
-        require(RewardableCanClaim(tokenId),"Token not eligible for claim");
-        lastClaimTimeStamp[tokenId] = block.timestamp;
+        return true;
+    }
+
+    function _ClaimRewards(uint256 tokenId) internal {
+        if(_rewardableCanClaim(tokenId)){
+            lastClaimTimeStamp[tokenId] = block.timestamp;
+        }
     }
 
     // Set time (in days) needed to mint one reward. Default : 30 days
@@ -2050,7 +2050,7 @@ contract MOJICLUB is RewardableERC721, Whitelist {
     // TODO : tableau d'int en argument
     function claimTickets(uint256[] calldata tokenIds) public {
         for (uint i = 0; i < tokenIds.length; i++) {
-            _ResetClaimTimestamp(tokenIds[i]);
+            _ClaimRewards(tokenIds[i]);
             _tickets.mintTicket(_msgSender(),1);
         }
     }
@@ -2061,8 +2061,8 @@ contract MOJICLUB is RewardableERC721, Whitelist {
         require(saleStart > WL_MINT_TIMESTAMP, "Can't advance release date");
         require(!SaleIsActive(), "Can't postpone : Already released");
         WL_MINT_TIMESTAMP = saleStart;
-        MINT_TIMESTAMP = saleStart.add(3600); // 1 hour after WL sale
-        REVEAL_TIMESTAMP = saleStart.add(154800); // 1 day after public sale
+        MINT_TIMESTAMP = saleStart.add(600); // 10 min after WL sale
+        REVEAL_TIMESTAMP = saleStart.add(86400); // 1 day after public sale
         _SALE_DATE_DEFINED = true;
     }
 

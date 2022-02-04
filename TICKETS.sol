@@ -1919,28 +1919,26 @@ contract TICKETS is ERC721, Ownable {
      */
     address public _callerAddr = address(0);
 
+    constructor(string memory _uri) ERC721("Moji Club Mint Coupon", "MJCC") {
+        _setBaseURI(_uri);
+    }
+
+    // Caller ensures the smart contracts can only be called/written by one address (_callerAddr)
     modifier onlyCaller() {
-        require(_callerAddr == _msgSender(), "Caller != msg.sender");
+        require(_isCaller(), "Not called by caller");
         require(_callerAddr != address(0), "Caller can't be address 0");
         _;
-    }
-
-    constructor() ERC721("Moji Club Gen1 Ticket", "MJCT") { }
-    
-    // In the case of tickets, they will all have the same URI
-    function setBaseURI(string memory baseURI) public onlyOwner {
-        _setBaseURI(baseURI);
-    }
-
-    // Holding a TICKETS token gives right to mint a PFPNFT. Set this address
-    function setCallerAddr(address _callr) public onlyOwner {
-        require(_callerAddr == address(0), "_callerAddr has been set already");
-        _callerAddr = _callr;
     }
 
     // Verify if msg sender is the Caller
     function _isCaller() public view returns (bool) {
         return _callerAddr == _msgSender();
+    }
+
+    // Holding a TICKETS token gives right to mint a PFPNFT. Set this address
+    function setCallerAddr(address _callr) public onlyOwner {
+        require(_callerAddr == address(0), "Caller has been set already");
+        _callerAddr = _callr;
     }
 
     // All NFTs will have the same URI, so lets override the tokenURI to always return baseURI
