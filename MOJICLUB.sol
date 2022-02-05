@@ -1966,7 +1966,7 @@ abstract contract RewardableERC721 is ERC721, Ownable {
     mapping(uint256 => uint256) lastClaimTimeStamp;
 
     // Only GEN0 tokens are Rewardable
-    uint256 _GEN0_Max_Id;
+    uint256 public GEN0_Max_Id;
 
     // Can claim every 30 days by default (24*3600*30 = 2592000)
     uint256 _claimEvery = 2592000;
@@ -1977,9 +1977,9 @@ abstract contract RewardableERC721 is ERC721, Ownable {
     }
 
     function _rewardableCanClaim(uint256 tokenId) internal view returns(bool) {
-        require(totalSupply()>=_GEN0_Max_Id, "Rewards will be available once Gen0 solds out");
+        require(totalSupply()>=GEN0_Max_Id, "Rewards will be available once Gen0 solds out");
         require(block.timestamp >= RewardableTimestamp(tokenId), "Need to wait to claim");
-        require(_GEN0_Max_Id > tokenId, "Gen1 NFTs are not eligible to mint rewards");
+        require(GEN0_Max_Id > tokenId, "Gen1 NFTs are not eligible to mint rewards");
         require(ownerOf(tokenId) == _msgSender(), "Only holder of Token can claim");
         return true;
     }
@@ -2012,45 +2012,23 @@ contract MOJICLUB is RewardableERC721, Whitelist {
     uint256 public constant MAX_MINT = 3;
 
     bool private _SALE_PAUSED = false;
+    string private _preRevealUrl;
+
     uint256 public WL_MINT_TIMESTAMP;
     uint256 public MINT_TIMESTAMP;
     uint256 public REVEAL_TIMESTAMP;
-    string _preRevealUrl;
-
     ITICKETS public _tickets;
 
     // tickets_addr -> TICKETS contract address
     constructor(address tickets_addr, uint256 supp) ERC721("Moji Club", "MJC") {
-        _GEN0_Max_Id = supp;
+        GEN0_Max_Id = supp;
         _tickets = ITICKETS(tickets_addr);
         _tickets.setCallerAddr(address(this));
     }
 
-    // Getters
-    function PRICE_ETH_() public pure returns(uint256) {
-        return PRICE_ETH;
-    }
-
-    function MAX_MINT_() public pure returns(uint256) {
-        return MAX_MINT;
-    }
-
-    function GEN0_SUPPLY_() public view returns(uint256) {
-        return _GEN0_Max_Id;
-    }
-
-    // Test functions with TICKETS
-    function burnTicket(uint256 nbTickets) public onlyOwner {
-        _tickets.burnTicket(_msgSender(),nbTickets);
-    }
-
-    function getTicket(uint256 nbTickets) public onlyOwner {
-        _tickets.mintTicket(_msgSender(),nbTickets);
-    }
-
     // Mints tickets if Moji Club NFTs gives right for a free ticket
     // TODO : tableau d'int en argument
-    function claimTickets(uint256[] memory tokenIds) public {
+    function _claimTickets(uint256[] memory tokenIds) internal {
         for (uint i = 0; i < tokenIds.length; i++) {
             _ClaimRewards(tokenIds[i]);
             _tickets.mintTicket(_msgSender(),1);
@@ -2059,7 +2037,7 @@ contract MOJICLUB is RewardableERC721, Whitelist {
 
     function claimTickets() public {
         uint256[] memory tkns = holderTokens();
-        claimTickets(tkns);
+        _claimTickets(tkns);
     }
 
     // Set Listing date of Whitelist mint
@@ -2128,9 +2106,9 @@ contract MOJICLUB is RewardableERC721, Whitelist {
         }
 
         // Determine if we're on GEN0 or GEN1
-        bool current_gen0 = totalSupply()<_GEN0_Max_Id;
+        bool current_gen0 = totalSupply()<GEN0_Max_Id;
         if(current_gen0) {
-            require(totalSupply().add(numberOfTokens) <= _GEN0_Max_Id, "Purchase would exceed max supply of Gen0 tokens.");
+            require(totalSupply().add(numberOfTokens) <= GEN0_Max_Id, "Purchase would exceed max supply of Gen0 tokens.");
             
             // in Gen0, Non-FreeMint user have to send the correct amount of ETH to mint tokens
             if(!FreeMint){
