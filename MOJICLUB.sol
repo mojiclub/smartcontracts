@@ -1976,18 +1976,13 @@ abstract contract RewardableERC721 is ERC721, Ownable {
         return lastClaimTimeStamp[tokenId].add(_claimEvery);
     }
 
-    function _rewardableCanClaim(uint256 tokenId) internal view returns(bool) {
-        require(totalSupply()>=GEN0_Max_Id, "Rewards will be available once Gen0 solds out");
-        require(block.timestamp >= RewardableTimestamp(tokenId), "Need to wait to claim");
-        require(GEN0_Max_Id > tokenId, "Gen1 NFTs are not eligible to mint rewards");
-        require(ownerOf(tokenId) == _msgSender(), "Only holder of Token can claim");
-        return true;
+    function RewardableCanClaim(uint256 tokenId) public view returns(bool) {
+        return totalSupply()>=GEN0_Max_Id && block.timestamp >= RewardableTimestamp(tokenId) && GEN0_Max_Id > tokenId && ownerOf(tokenId) == _msgSender();
     }
 
     function _ClaimRewards(uint256 tokenId) internal {
-        if(_rewardableCanClaim(tokenId)){
-            lastClaimTimeStamp[tokenId] = block.timestamp;
-        }
+        require(RewardableCanClaim(tokenId),"Can't claim");
+        lastClaimTimeStamp[tokenId] = block.timestamp;
     }
 
     // Set time (in days) needed to mint one reward. Default : 30 days
@@ -2009,45 +2004,50 @@ contract MOJICLUB is RewardableERC721, Whitelist {
 
     // Mint price ; valid only for Gen0 trough
     uint256 public constant PRICE_ETH = 90000000000000000; //0.09 ETH
-    uint256 public constant MAX_MINT = 3;
+    uint256 public constant MAX_MINT = 1;
 
     bool private _SALE_PAUSED = false;
     string private _preRevealUrl;
+    string private _traitsScarcitySHA;
+
+    // NFTs urls
+    mapping(uint256 => string) private _mojiTokensUrls;
+    // NFT traits representation
+    mapping(string => uint256) private _mojiTokensTraits;
+    // Because on how mapping works, we need to store traits of token 0 in a separate var
+    string private _mojiTokensTraits0;
 
     uint256 public WL_MINT_TIMESTAMP;
     uint256 public MINT_TIMESTAMP;
-    uint256 public REVEAL_TIMESTAMP;
     ITICKETS public _tickets;
 
     // tickets_addr -> TICKETS contract address
-    constructor(address tickets_addr, uint256 supp) ERC721("Moji Club", "MJC") {
-        GEN0_Max_Id = supp;
+    constructor(address tickets_addr, uint256 _supply) ERC721("Moji Club", "MJC") {
+        GEN0_Max_Id = _supply;
         _tickets = ITICKETS(tickets_addr);
         _tickets.setCallerAddr(address(this));
     }
 
+    function SetScarcity(string memory _str) public {
+        _traitsScarcitySHA = _str;
+    }
+
     // Mints tickets if Moji Club NFTs gives right for a free ticket
     // TODO : tableau d'int en argument
-    function _claimTickets(uint256[] memory tokenIds) internal {
+    function ClaimTickets(uint256[] memory tokenIds) public {
         for (uint i = 0; i < tokenIds.length; i++) {
             _ClaimRewards(tokenIds[i]);
             _tickets.mintTicket(_msgSender(),1);
         }
     }
 
-    function claimTickets() public {
-        uint256[] memory tkns = holderTokens();
-        _claimTickets(tkns);
-    }
-
     // Set Listing date of Whitelist mint
-    function setListingDate(uint256 saleStart) public onlyOwner {
+    function setListingDate(uint256 saleStart, uint256 wl_delay) public onlyOwner {
         require(saleStart > block.timestamp, "Please choose a future date");
         require(saleStart > WL_MINT_TIMESTAMP, "Can't advance release date");
-        require(!SaleIsActive(), "Can't postpone : Already released");
+        require(block.timestamp < WL_MINT_TIMESTAMP, "Listing already started");
         WL_MINT_TIMESTAMP = saleStart;
-        MINT_TIMESTAMP = saleStart.add(600); // 10 min after WL sale
-        REVEAL_TIMESTAMP = MINT_TIMESTAMP.add(86400); // 1 day after public sale
+        MINT_TIMESTAMP = saleStart.add(wl_delay); // Leave 10 min for WL people to mint before public sale --> wl_delay=600
     }
 
     function flipSaleState() public onlyOwner {
@@ -2059,35 +2059,22 @@ contract MOJICLUB is RewardableERC721, Whitelist {
         _msgSender().transfer(balance);
     }
 
+    // Returns true even if public sale didnt started whereas WL sale did.
     function SaleIsActive() public view returns (bool) {
-        return block.timestamp >= WL_MINT_TIMESTAMP && !_SALE_PAUSED && WL_MINT_TIMESTAMP!=-0;
-    }
-
-    // Set Tokens URI (JSON)
-    function setBaseURI(string memory baseURI) public onlyOwner {
-        _setBaseURI(baseURI);
-    }
-
-    // Set pre-reveal info
-    function setTmpURI(string memory _uri) public onlyOwner {
-        _preRevealUrl = _uri;
+        return block.timestamp >= WL_MINT_TIMESTAMP && !_SALE_PAUSED && WL_MINT_TIMESTAMP!=0;
     }
 
     // If reveal has not happened yet, return the same URL for every token
     function tokenURI(uint256 tokenId) public view override returns (string memory) {
-        if(block.timestamp<REVEAL_TIMESTAMP) {
-            return _preRevealUrl;
-        } else {
-            return super.tokenURI(tokenId);
-        }
+        return _mojiTokensUrls[tokenId];
     }
 
     /**
-    * Mints Tokens
+    * Mint one token
     */
-    function mint(uint numberOfTokens) public payable {
-        require(numberOfTokens <= MAX_MINT, "Can only mint 'MAX_MINT' tokens at a time");
+    function mint(string memory _tknUrl, string memory _tknTraits) public payable {
         require(SaleIsActive(), "Sale must be active to mint Token");
+        require(_mojiTokensTraits[_tknTraits] == 0 && keccak256(abi.encodePacked(_tknTraits)) == keccak256(abi.encodePacked(_mojiTokensTraits0)), "A token with the exact same traits has already be minted.");
 
         bool Whistelisted = isWhitelisted(_msgSender());
         bool FreeMint = isFreeMintWhitelisted(_msgSender());
@@ -2097,28 +2084,19 @@ contract MOJICLUB is RewardableERC721, Whitelist {
             require(Whistelisted || FreeMint, "Only whitelisted can mint for now");
         }
 
-        // Only allow one mint to free mint users, others can mint 'MAX_MINT' tokens.
-        if(FreeMint){
-            require(numberOfTokens == 1, "Can only mint one token for free");
-            // Remove user from Free Mint WL as he's using his free mint right now
-        } else {
-            require(numberOfTokens <= MAX_MINT, "Can only mint 'MAX_MINT' tokens at a time");
-        }
-
         // Determine if we're on GEN0 or GEN1
         bool current_gen0 = totalSupply()<GEN0_Max_Id;
         if(current_gen0) {
-            require(totalSupply().add(numberOfTokens) <= GEN0_Max_Id, "Purchase would exceed max supply of Gen0 tokens.");
-            
+
             // in Gen0, Non-FreeMint user have to send the correct amount of ETH to mint tokens
             if(!FreeMint){
-                require(PRICE_ETH.mul(numberOfTokens) <= msg.value, "Ether value sent is not correct");
+                require(PRICE_ETH <= msg.value, "Ether value sent is not correct");
             }
         } else {
             // in Gen1, Non-FreeMint user have to own as much MJCC NFTs as they want to mint MJC.
             // MJCC are burnt in the process.
             if(!FreeMint){
-                require(_tickets.balanceOf(_msgSender())>=numberOfTokens,"Not enough tickets to mint");
+                require(_tickets.balanceOf(_msgSender())>=1,"Not enough tickets to mint");
             }
         }
 
@@ -2127,16 +2105,19 @@ contract MOJICLUB is RewardableERC721, Whitelist {
         if(FreeMint){
             useFreeMint();
         } else {
-            // In Gen1, MJCC are burnt to mint MJC.
+            // In Gen1, for non-FreeMint, MJCC are burnt to mint MJC.
             if(!current_gen0){
-                _tickets.burnTicket(_msgSender(),numberOfTokens);
+                _tickets.burnTicket(_msgSender(),1);
             }
         }
         
-        // Mint MJC tokens
-        for(uint i = 0; i < numberOfTokens; i++) {
-            uint mintIndex = totalSupply();
-            _safeMint(_msgSender(), mintIndex);
+        // Mint MJC token
+        uint mintIndex = totalSupply();
+        _safeMint(_msgSender(), mintIndex);
+        _mojiTokensUrls[mintIndex] = _tknUrl;
+        _mojiTokensTraits[_tknTraits] = mintIndex;
+        if(mintIndex==0){
+            _mojiTokensTraits0 = _tknTraits;
         }
     }
 
