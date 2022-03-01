@@ -2065,7 +2065,7 @@ contract MOJICLUB is RewardableERC721, Whitelist {
     // tickets_addr -> TICKETS contract address
     constructor(address tickets_addr, uint256 _gen0supply, uint256 _gen1supply)
         ERC721("Moji Club", "MJC")
-        MultiGenERC721(10000, 30000)
+        MultiGenERC721(_gen0supply, _gen1supply)
         RewardableERC721(tickets_addr)
     {
 
