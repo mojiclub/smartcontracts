@@ -2,7 +2,7 @@
 
 // SPDX-License-Identifier: MIT
 
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.12;
 
 /*
  * @dev Provides information about the current execution context, including the
@@ -29,7 +29,7 @@ abstract contract Context {
 
 
 
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.12;
 
 /**
  * @dev Interface of the ERC165 standard, as defined in the
@@ -56,7 +56,7 @@ interface IERC165 {
 
 
 
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.12;
 
 
 /**
@@ -187,7 +187,7 @@ interface IERC721 is IERC165 {
 
 
 
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.12;
 
 
 /**
@@ -216,7 +216,7 @@ interface IERC721Metadata is IERC721 {
 
 
 
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.12;
 
 
 /**
@@ -247,7 +247,7 @@ interface IERC721Enumerable is IERC721 {
 
 
 
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.12;
 
 /**
  * @title ERC721 token receiver interface
@@ -271,7 +271,7 @@ interface IERC721Receiver {
 
 
 
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.12;
 
 
 /**
@@ -327,7 +327,7 @@ abstract contract ERC165 is IERC165 {
 
 
 
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.12;
 
 /**
  * @dev Wrappers over Solidity's arithmetic operations with added overflow
@@ -544,7 +544,7 @@ library SafeMath {
 
 
 
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.12;
 
 /**
  * @dev Collection of functions related to the address type
@@ -736,7 +736,7 @@ library Address {
 
 
 
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.12;
 
 /**
  * @dev Library for managing
@@ -1036,7 +1036,7 @@ library EnumerableSet {
 
 
 
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.12;
 
 /**
  * @dev Library for managing an enumerable variant of Solidity's
@@ -1305,7 +1305,7 @@ library EnumerableMap {
 
 
 
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.12;
 
 /**
  * @dev String operations.
@@ -1336,13 +1336,27 @@ library Strings {
         }
         return string(buffer);
     }
+
+    function stringToUint(string memory s) internal pure returns (uint) {
+        bytes memory b = bytes(s);
+        uint i;
+        uint result = 0;
+        for (i = 0; i < b.length; i++) {
+            uint c = uint(uint8(b[i]));
+            if (c >= 48 && c <= 57) {
+                result = result * 10 + (c - 48);
+            }
+        }
+        return result;
+    }
+
 }
 
 // File: @openzeppelin/contracts/token/ERC721/ERC721.sol
 
 
 
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.12;
 
 
 
@@ -1834,7 +1848,7 @@ contract ERC721 is Context, ERC165, IERC721, IERC721Metadata, IERC721Enumerable 
 
 
 
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.12;
 
 /**
  * @dev Contract module which provides a basic access control mechanism, where
@@ -1902,86 +1916,108 @@ abstract contract Ownable is Context {
 
 // File: Whitelist.sol
 contract Whitelist is Ownable {
+    using SafeMath for uint256;
 
     // Classic whitelists : mint before anyone else
-    mapping(address => bool) whitelist;
-    event AddedToWhitelist(address indexed account);
-    event RemovedFromWhitelist(address indexed account);
+    uint256 public WL_MINT_TIMESTAMP;
+    uint256 public MINT_TIMESTAMP;
 
-    modifier onlyWhitelisted() {
-        require(isWhitelisted(msg.sender));
-        _;
+    bytes32 public wl_merkleRoot;
+    bytes32 public freemint_merkleRoot;
+
+    mapping(address => bool) wl_used;
+    mapping(address => bool) freemint_used;
+
+    function setMerkleRoots(bytes32 _wl, bytes32 _freemint) public onlyOwner {
+        wl_merkleRoot = _wl;
+        freemint_merkleRoot = _freemint;
     }
 
-    function WLAdd(address _address) public onlyOwner {
-        whitelist[_address] = true;
-        emit AddedToWhitelist(_address);
+    function _hasWhitelist(bytes32[] calldata merkleProof, address _addr) internal view returns(bool) {
+        if(wl_used[_addr]) {
+            return false;
+        }
+        bytes32 leaf = keccak256(abi.encodePacked(_addr));
+        return MerkleProof.verify(merkleProof, wl_merkleRoot, leaf);
     }
 
-    function WLRemove(address _address) public onlyOwner {
-        whitelist[_address] = false;
-        emit RemovedFromWhitelist(_address);
+    function _hasFreeMint(bytes32[] calldata merkleProof, address _addr) internal view returns(bool) {
+        if(freemint_used[_addr]) {
+            return false;
+        }
+        bytes32 leaf = keccak256(abi.encodePacked(_addr));
+        return MerkleProof.verify(merkleProof, freemint_merkleRoot, leaf);
     }
 
-    function isWhitelisted(address _address) public view returns(bool) {
-        return whitelist[_address];
+    function _useWl(address _addr) internal {
+        wl_used[_addr] = true;
     }
 
-    // Free mints (giveways winners)
-    mapping(address => bool) freeMintWhitelist;
-    event AddedToFreeMintWhitelist(address indexed account);
-    event RemovedFromFreeMintWhitelist(address indexed account);
-
-    modifier onlyFreeMintWhitelisted() {
-        require(isFreeMintWhitelisted(_msgSender()));
-        _;
+    function _useFreeMint(address _addr) internal {
+        freemint_used[_addr] = true;
     }
 
-    function WLFreeMintAdd(address _address) public onlyOwner {
-        freeMintWhitelist[_address] = true;
-        emit AddedToFreeMintWhitelist(_address);
-    }
-
-    function WLFreeMintRemove(address _address) public onlyOwner {
-        freeMintWhitelist[_address] = false;
-        emit RemovedFromFreeMintWhitelist(_address);
-    }
-
-    function useFreeMint() internal {
-        freeMintWhitelist[_msgSender()] = false;
-        emit RemovedFromFreeMintWhitelist(_msgSender());
-    }
-
-    function isFreeMintWhitelisted(address _address) public view returns(bool) {
-        return freeMintWhitelist[_address];
+    // Set Listing date of Whitelist mint
+    function setListingDate(uint256 saleStart, uint256 wl_delay) public onlyOwner {
+        require(saleStart > block.timestamp, "Choose a future date");
+        require(saleStart > WL_MINT_TIMESTAMP, "Cant advance release date");
+        require(WL_MINT_TIMESTAMP==0 || block.timestamp < WL_MINT_TIMESTAMP, "Listing started");
+        WL_MINT_TIMESTAMP = saleStart;
+        MINT_TIMESTAMP = saleStart.add(wl_delay); // Leave 10 min for WL people to mint before public sale --> wl_delay=600
     }
 }
 
-// File: RewardableERC721.sol
+abstract contract MultiGenERC721 is ERC721, Ownable {
+    uint256 public immutable GEN0_SUPPLY;
+    uint256 public immutable GEN1_SUPPLY;
 
-abstract contract RewardableERC721 is ERC721, Ownable {
+    constructor(uint256 _gen0supply, uint256 _gen1supply) {
+        GEN0_SUPPLY = _gen0supply;
+        GEN1_SUPPLY = _gen1supply;
+    }
+
+    function _get_gen() internal view returns(uint8) {
+        if(totalSupply()<GEN0_SUPPLY) {
+            return 0;
+        } else {
+            return 1;
+        }
+    }
+
+    function _isGen0(uint256 tokenId) internal view returns(bool) {
+        return GEN0_SUPPLY<tokenId;
+    }
+}
+
+abstract contract RewardableERC721 is MultiGenERC721 {
     using SafeMath for uint256;
+
+    // Reward token
+    REWARD_TOKEN public immutable _tickets;
 
     // Last timestamp at which token was used to claim
     mapping(uint256 => uint256) lastClaimTimeStamp;
 
-    // Only GEN0 tokens are Rewardable
-    uint256 public GEN0_Max_Id;
-
     // Can claim every 30 days by default (24*3600*30 = 2592000)
     uint256 _claimEvery = 2592000;
+
+    constructor(address tickets_addr) {
+        _tickets = REWARD_TOKEN(tickets_addr);
+        _tickets.setCallerAddr();
+    }
 
     // Returns next timestamp at which tokenId becomes eligible for a new claim 
     function RewardableTimestamp(uint256 tokenId) public view returns(uint256) {
         return lastClaimTimeStamp[tokenId].add(_claimEvery);
     }
 
+    // Only GEN0 tokens are Rewardable, only after GEN0 sold out
     function RewardableCanClaim(uint256 tokenId) public view returns(bool) {
-        return totalSupply()>=GEN0_Max_Id && block.timestamp >= RewardableTimestamp(tokenId) && GEN0_Max_Id > tokenId && ownerOf(tokenId) == _msgSender();
+        return _get_gen()==1 && block.timestamp >= RewardableTimestamp(tokenId) && !_isGen0(tokenId) && ownerOf(tokenId) == _msgSender();
     }
 
     function _ClaimRewards(uint256 tokenId) internal {
-        require(RewardableCanClaim(tokenId),"Can't claim");
+        require(RewardableCanClaim(tokenId),"Cant claim");
         lastClaimTimeStamp[tokenId] = block.timestamp;
     }
 
@@ -1989,11 +2025,20 @@ abstract contract RewardableERC721 is ERC721, Ownable {
     function setClaimTime(uint256 ds) public onlyOwner {
         _claimEvery = ds.mul(86400);
     }
+
+    // Mints tickets if NFTs gives right for a free ticket
+    // TODO : tableau d'int en argument
+    function ClaimTickets(uint256[] memory tokenIds) public {
+        for (uint i = 0; i < tokenIds.length; i++) {
+            _ClaimRewards(tokenIds[i]);
+        }
+        _tickets.mintTicket(_msgSender(),tokenIds.length);
+    }
 }
 
 // File: contracts/BoredApeYachtClub.sol
 
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.12;
 
 /**
  * @title Moji Club contract
@@ -2003,51 +2048,27 @@ contract MOJICLUB is RewardableERC721, Whitelist {
     using SafeMath for uint256;
 
     // Mint price ; valid only for Gen0 trough
-    uint256 public constant PRICE_ETH = 90000000000000000; //0.09 ETH
+    uint256 public constant PRICE_ETH = 0.09 ether; //0.09 ETH
     uint256 public constant MAX_MINT = 1;
 
     bool private _SALE_PAUSED = false;
-    string private _preRevealUrl;
-    string private _traitsScarcitySHA;
 
-    // NFTs urls
+    // Ethereum address used to sign hashes offchain
+    address _hash_signer = 0x76B9079C439a1beaf047eee9FBDf4608F7e12158;
+    // Mapping containing URL for each NFT
     mapping(uint256 => string) private _mojiTokensUrls;
-    // NFT traits representation
+    // Mapping containing base36 repr of all traits of each NFT
     mapping(string => uint256) private _mojiTokensTraits;
-    // Because on how mapping works, we need to store traits of token 0 in a separate var
+    // Because on how mapping works in Solidity, we need to store traits of token 0 in a separate var
     string private _mojiTokensTraits0;
 
-    uint256 public WL_MINT_TIMESTAMP;
-    uint256 public MINT_TIMESTAMP;
-    ITICKETS public _tickets;
-
     // tickets_addr -> TICKETS contract address
-    constructor(address tickets_addr, uint256 _supply) ERC721("Moji Club", "MJC") {
-        GEN0_Max_Id = _supply;
-        _tickets = ITICKETS(tickets_addr);
-        _tickets.setCallerAddr(address(this));
-    }
+    constructor(address tickets_addr, uint256 _gen0supply, uint256 _gen1supply)
+        ERC721("Moji Club", "MJC")
+        MultiGenERC721(10000, 30000)
+        RewardableERC721(tickets_addr)
+    {
 
-    function SetScarcity(string memory _str) public {
-        _traitsScarcitySHA = _str;
-    }
-
-    // Mints tickets if Moji Club NFTs gives right for a free ticket
-    // TODO : tableau d'int en argument
-    function ClaimTickets(uint256[] memory tokenIds) public {
-        for (uint i = 0; i < tokenIds.length; i++) {
-            _ClaimRewards(tokenIds[i]);
-            _tickets.mintTicket(_msgSender(),1);
-        }
-    }
-
-    // Set Listing date of Whitelist mint
-    function setListingDate(uint256 saleStart, uint256 wl_delay) public onlyOwner {
-        require(saleStart > block.timestamp, "Please choose a future date");
-        require(saleStart > WL_MINT_TIMESTAMP, "Can't advance release date");
-        require(block.timestamp < WL_MINT_TIMESTAMP, "Listing already started");
-        WL_MINT_TIMESTAMP = saleStart;
-        MINT_TIMESTAMP = saleStart.add(wl_delay); // Leave 10 min for WL people to mint before public sale --> wl_delay=600
     }
 
     function flipSaleState() public onlyOwner {
@@ -2066,58 +2087,82 @@ contract MOJICLUB is RewardableERC721, Whitelist {
 
     // If reveal has not happened yet, return the same URL for every token
     function tokenURI(uint256 tokenId) public view override returns (string memory) {
-        return _mojiTokensUrls[tokenId];
+        return string(abi.encodePacked("ipfs://", _mojiTokensUrls[tokenId]));
     }
 
-    /**
-    * Mint one token
-    */
-    function mint(string memory _tknUrl, string memory _tknTraits) public payable {
-        require(SaleIsActive(), "Sale must be active to mint Token");
-        require(_mojiTokensTraits[_tknTraits] == 0 && keccak256(abi.encodePacked(_tknTraits)) == keccak256(abi.encodePacked(_mojiTokensTraits0)), "A token with the exact same traits has already be minted.");
+    // Hash contains [A-Za-z0-9] and ends with ;0 or with ;1
+    function _getGenFromHash(string memory _hash) internal pure returns (uint8) {
+        bytes memory gen = new bytes(1);
+        for(uint i=0;i<bytes(_hash).length;i++){
+            if(bytes(_hash)[i]==";"){
+                gen[0] = bytes(_hash)[i+1];
+                string memory js = string(gen);
+                if(keccak256(abi.encodePacked(js)) == keccak256(abi.encodePacked("0"))) {
+                    return 0;
+                }
+                return 1;
+            }
+        }
+        return 1;
+    }
 
-        bool Whistelisted = isWhitelisted(_msgSender());
-        bool FreeMint = isFreeMintWhitelisted(_msgSender());
+    function mint(string[2] memory _msgs, bytes32[4] memory _hashs_r_s, uint8[2] memory _v, bytes32[] calldata _proof) public payable {
+        require(ecrecover(sha256(abi.encodePacked(_msgs[0])), _v[0], _hashs_r_s[0], _hashs_r_s[1]) == _hash_signer,"Fail1");
+        require(ecrecover(sha256(abi.encodePacked(_msgs[1])), _v[1], _hashs_r_s[2], _hashs_r_s[3]) == _hash_signer,"Fail2");
+        require(_mojiTokensTraits[_msgs[0]] == 0 && keccak256(abi.encodePacked(_msgs[0])) != keccak256(abi.encodePacked(_mojiTokensTraits0)), "Fail3");
+        require(SaleIsActive(), "Fail4");
+        uint8 GEN = _get_gen();
+        require(_getGenFromHash(_msgs[0])==GEN,"Fail5");
+        require(totalSupply()<GEN1_SUPPLY,"Fail6");
+
+        bool Whistelisted = _hasWhitelist(_proof, _msgSender());
+        bool FreeMint = _hasFreeMint(_proof, _msgSender());
 
         // Only allow whitelisted addresses to mint during presale
         if(block.timestamp < MINT_TIMESTAMP) {
-            require(Whistelisted || FreeMint, "Only whitelisted can mint for now");
+            require(Whistelisted || FreeMint, "Not whitelisted");
         }
+        
+        if(GEN==0) {
 
-        // Determine if we're on GEN0 or GEN1
-        bool current_gen0 = totalSupply()<GEN0_Max_Id;
-        if(current_gen0) {
-
-            // in Gen0, Non-FreeMint user have to send the correct amount of ETH to mint tokens
+            // in Gen0, Non-FreeMint users have to send the correct amount of ETH to mint tokens
             if(!FreeMint){
-                require(PRICE_ETH <= msg.value, "Ether value sent is not correct");
+                require(PRICE_ETH <= msg.value, "Insufficient ETH");
             }
         } else {
-            // in Gen1, Non-FreeMint user have to own as much MJCC NFTs as they want to mint MJC.
+            // in Gen1, Non-FreeMint users have to own as much MJCC NFTs as they want to mint MJC.
             // MJCC are burnt in the process.
             if(!FreeMint){
-                require(_tickets.balanceOf(_msgSender())>=1,"Not enough tickets to mint");
+                require(_tickets.balanceOf(_msgSender())>=1,"Insufficient MJCC");
             }
         }
 
         // All checks done, 
         // Remove the Free Mint entry as user is using it right now
         if(FreeMint){
-            useFreeMint();
+            _useFreeMint(_msgSender());
         } else {
-            // In Gen1, for non-FreeMint, MJCC are burnt to mint MJC.
-            if(!current_gen0){
+            // In Gen1, for non-FreeMint, one MJCC is burnt to mint one MJC.
+            if(GEN==1){
                 _tickets.burnTicket(_msgSender(),1);
             }
         }
+
+        if(Whistelisted) {
+            _useWl(_msgSender());
+        }
         
         // Mint MJC token
+        _mojiMint(_msgs[1],_msgs[0]);
+    }
+
+    function _mojiMint(string memory _url_msg, string memory _base36_msg) internal {
         uint mintIndex = totalSupply();
         _safeMint(_msgSender(), mintIndex);
-        _mojiTokensUrls[mintIndex] = _tknUrl;
-        _mojiTokensTraits[_tknTraits] = mintIndex;
+        _mojiTokensUrls[mintIndex] = _url_msg;
+        _mojiTokensTraits[_base36_msg] = mintIndex;
         if(mintIndex==0){
-            _mojiTokensTraits0 = _tknTraits;
+            _mojiTokensTraits0 = _base36_msg;
         }
     }
 
@@ -2125,16 +2170,63 @@ contract MOJICLUB is RewardableERC721, Whitelist {
     * Burn Tokens
     */
     function burn(uint256 tokenId) public {
-        require(_isApprovedOrOwner(_msgSender(), tokenId), "ERC721: burn caller is not owner nor approved");
+        require(_isApprovedOrOwner(_msgSender(), tokenId), "Denied");
         _burn(tokenId);
     }
 }
 
-pragma solidity ^0.8.0;
-
-interface ITICKETS {
+interface REWARD_TOKEN {
     function burnTicket(address holder, uint256 amount) external;
     function mintTicket(address to, uint256 numberOfTokens) external;
     function balanceOf(address holder) external view returns(uint256);
-    function setCallerAddr(address _callr) external;
+    function setCallerAddr() external;
+}
+
+
+/**
+ * @dev These functions deal with verification of Merkle Trees proofs.
+ *
+ * The proofs can be generated using the JavaScript library
+ * https://github.com/miguelmota/merkletreejs[merkletreejs].
+ * Note: the hashing algorithm should be keccak256 and pair sorting should be enabled.
+ *
+ * See `test/utils/cryptography/MerkleProof.test.js` for some examples.
+ */
+library MerkleProof {
+    /**
+     * @dev Returns true if a `leaf` can be proved to be a part of a Merkle tree
+     * defined by `root`. For this, a `proof` must be provided, containing
+     * sibling hashes on the branch from the leaf to the root of the tree. Each
+     * pair of leaves and each pair of pre-images are assumed to be sorted.
+     */
+    function verify(
+        bytes32[] memory proof,
+        bytes32 root,
+        bytes32 leaf
+    ) internal pure returns (bool) {
+        return processProof(proof, leaf) == root;
+    }
+
+    /**
+     * @dev Returns the rebuilt hash obtained by traversing a Merklee tree up
+     * from `leaf` using `proof`. A `proof` is valid if and only if the rebuilt
+     * hash matches the root of the tree. When processing the proof, the pairs
+     * of leafs & pre-images are assumed to be sorted.
+     *
+     * _Available since v4.4._
+     */
+    function processProof(bytes32[] memory proof, bytes32 leaf) internal pure returns (bytes32) {
+        bytes32 computedHash = leaf;
+        for (uint256 i = 0; i < proof.length; i++) {
+            bytes32 proofElement = proof[i];
+            if (computedHash <= proofElement) {
+                // Hash(current computed hash + current element of the proof)
+                computedHash = keccak256(abi.encodePacked(computedHash, proofElement));
+            } else {
+                // Hash(current element of the proof + current computed hash)
+                computedHash = keccak256(abi.encodePacked(proofElement, computedHash));
+            }
+        }
+        return computedHash;
+    }
 }

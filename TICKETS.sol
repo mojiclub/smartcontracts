@@ -2,7 +2,7 @@
 
 // SPDX-License-Identifier: MIT
 
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.12;
 
 /*
  * @dev Provides information about the current execution context, including the
@@ -29,7 +29,7 @@ abstract contract Context {
 
 
 
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.12;
 
 /**
  * @dev Interface of the ERC165 standard, as defined in the
@@ -56,7 +56,7 @@ interface IERC165 {
 
 
 
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.12;
 
 
 /**
@@ -187,7 +187,7 @@ interface IERC721 is IERC165 {
 
 
 
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.12;
 
 
 /**
@@ -216,7 +216,7 @@ interface IERC721Metadata is IERC721 {
 
 
 
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.12;
 
 
 /**
@@ -247,7 +247,7 @@ interface IERC721Enumerable is IERC721 {
 
 
 
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.12;
 
 /**
  * @title ERC721 token receiver interface
@@ -271,7 +271,7 @@ interface IERC721Receiver {
 
 
 
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.12;
 
 
 /**
@@ -327,7 +327,7 @@ abstract contract ERC165 is IERC165 {
 
 
 
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.12;
 
 /**
  * @dev Wrappers over Solidity's arithmetic operations with added overflow
@@ -544,7 +544,7 @@ library SafeMath {
 
 
 
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.12;
 
 /**
  * @dev Collection of functions related to the address type
@@ -736,7 +736,7 @@ library Address {
 
 
 
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.12;
 
 /**
  * @dev Library for managing
@@ -1036,7 +1036,7 @@ library EnumerableSet {
 
 
 
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.12;
 
 /**
  * @dev Library for managing an enumerable variant of Solidity's
@@ -1305,7 +1305,7 @@ library EnumerableMap {
 
 
 
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.12;
 
 /**
  * @dev String operations.
@@ -1342,7 +1342,7 @@ library Strings {
 
 
 
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.12;
 
 
 
@@ -1834,7 +1834,7 @@ contract ERC721 is Context, ERC165, IERC721, IERC721Metadata, IERC721Enumerable 
 
 
 
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.12;
 
 /**
  * @dev Contract module which provides a basic access control mechanism, where
@@ -1902,7 +1902,7 @@ abstract contract Ownable is Context {
 
 // File: contracts/BoredApeYachtClub.sol
 
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.12;
 
 /**
  * @title TICKETS contract
@@ -1925,8 +1925,7 @@ contract TICKETS is ERC721, Ownable {
 
     // Caller ensures the smart contracts can only be called/written by one address (_callerAddr)
     modifier onlyCaller() {
-        require(_isCaller(), "Not called by caller");
-        require(_callerAddr != address(0), "Caller can't be address 0");
+        require(_isCaller() && _callerAddr != address(0), "Not caller");
         _;
     }
 
@@ -1937,9 +1936,9 @@ contract TICKETS is ERC721, Ownable {
 
     // Holding a TICKETS token gives right to mint a MOJI CLUB.
     // Can only be set once.
-    function setCallerAddr(address _callr) public {
-        require(_callerAddr == address(0), "Caller has been set already");
-        _callerAddr = _callr;
+    function setCallerAddr() public {
+        require(_callerAddr == address(0), "Caller set already");
+        _callerAddr = _msgSender();
     }
 
     // All NFTs will have the same URI, so lets override the tokenURI to always return baseURI
@@ -1961,7 +1960,7 @@ contract TICKETS is ERC721, Ownable {
     * Burn Tokens
     */
     function burnTicket(address holder, uint256 amount) public onlyCaller {
-        require(balanceOf(holder)>=amount, "Not enough tickets to spend");
+        require(balanceOf(holder)>=amount, "Insufficient balance");
         for(uint i = 0; i < amount; i++) {
             uint256 tokenId = tokenOfOwnerByIndex(holder,0);
             _burn(tokenId);
