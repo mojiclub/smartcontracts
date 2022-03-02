@@ -2071,6 +2071,10 @@ contract MOJICLUB is RewardableERC721, Whitelist {
 
     }
 
+    function MintedHash(string memory _hash) public view returns(bool) {
+        return _mojiTokensTraits[_hash] != 0 || keccak256(abi.encodePacked(_hash)) == keccak256(abi.encodePacked(_mojiTokensTraits0));
+    }
+
     function flipSaleState() public onlyOwner {
         _SALE_PAUSED = !_SALE_PAUSED;
     }
@@ -2109,7 +2113,7 @@ contract MOJICLUB is RewardableERC721, Whitelist {
     function mint(string[2] memory _msgs, bytes32[4] memory _hashs_r_s, uint8[2] memory _v, bytes32[] calldata _proof) public payable {
         require(ecrecover(sha256(abi.encodePacked(_msgs[0])), _v[0], _hashs_r_s[0], _hashs_r_s[1]) == _hash_signer,"Fail1");
         require(ecrecover(sha256(abi.encodePacked(_msgs[1])), _v[1], _hashs_r_s[2], _hashs_r_s[3]) == _hash_signer,"Fail2");
-        require(_mojiTokensTraits[_msgs[0]] == 0 && keccak256(abi.encodePacked(_msgs[0])) != keccak256(abi.encodePacked(_mojiTokensTraits0)), "Fail3");
+        require(!MintedHash(_msgs[0]), "Fail3");
         require(SaleIsActive(), "Fail4");
         uint8 GEN = _get_gen();
         require(_getGenFromHash(_msgs[0])==GEN,"Fail5");
