@@ -2174,7 +2174,7 @@ contract MOJICLUB is RewardableERC721, Whitelist, PaymentSplitter {
     mapping(uint256 => string) private _mojiTokensUrls;
     mapping(string => bool) private _mojiTokensUrlList;
     // Mapping containing base36 repr of all traits of each NFT
-    mapping(string => bool) private _mojiTokensTraits;
+    mapping(string => bool) public _mojiTokensTraits;
 
     // tickets_addr -> TICKETS contract address
     constructor(address tickets_addr, uint256 _gen0supply, uint256 _gen1supply, address[] memory _payees, uint256[] memory _shares)
