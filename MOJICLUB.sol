@@ -1914,6 +1914,120 @@ abstract contract Ownable is Context {
     }
 }
 
+// File: PaymentSplitter.sol
+
+abstract contract PaymentSplitter {
+  using SafeMath for uint256;
+
+  event PayeeAdded(address account, uint256 shares);
+  event PaymentReleased(address to, uint256 amount);
+  event PaymentReceived(address from, uint256 amount);
+
+  uint256 private _totalShares;
+  uint256 private _totalReleased;
+
+  mapping(address => uint256) private _shares;
+  mapping(address => uint256) private _released;
+  address[] private _payees;
+
+  /**
+   * @dev Constructor
+   */
+  constructor(address[] memory _p, uint256[] memory _s) payable {
+    require(_p.length == _s.length);
+    require(_p.length > 0);
+
+    for (uint256 i = 0; i < _p.length; i++) {
+      _addPayee(_p[i], _s[i]);
+    }
+  }
+
+  /**
+   * @dev payable fallback
+   */
+  fallback() external payable {
+    emit PaymentReceived(msg.sender, msg.value);
+  }
+
+  receive() external payable {
+        // custom function code
+  }
+
+  /**
+   * @return the total shares of the contract.
+   */
+  function totalShares() public view returns(uint256) {
+    return _totalShares;
+  }
+
+  /**
+   * @return the total amount already released.
+   */
+  function totalReleased() public view returns(uint256) {
+    return _totalReleased;
+  }
+
+  /**
+   * @return the shares of an account.
+   */
+  function shares(address account) public view returns(uint256) {
+    return _shares[account];
+  }
+
+  /**
+   * @return the amount already released to an account.
+   */
+  function released(address account) public view returns(uint256) {
+    return _released[account];
+  }
+
+  /**
+   * @return the address of a payee.
+   */
+  function payee(uint256 index) public view returns(address) {
+    return _payees[index];
+  }
+
+  /**
+   * @dev Release one of the payee's proportional payment.
+   * @param account Whose payments will be released.
+   */
+  function release(address payable account) public {
+    require(_shares[account] > 0);
+
+    uint256 totalReceived = address(this).balance.add(_totalReleased);
+    uint256 payment = totalReceived.mul(
+      _shares[account]).div(
+        _totalShares).sub(
+          _released[account]
+    );
+
+    require(payment != 0);
+
+    _released[account] = _released[account].add(payment);
+    _totalReleased = _totalReleased.add(payment);
+
+    account.transfer(payment);
+    emit PaymentReleased(account, payment);
+  }
+
+  /**
+   * @dev Add a new payee to the contract.
+   * @param account The address of the payee to add.
+   * @param shares_ The number of shares owned by the payee.
+   */
+  function _addPayee(address account, uint256 shares_) private {
+    require(account != address(0));
+    require(shares_ > 0);
+    require(_shares[account] == 0);
+
+    _payees.push(account);
+    _shares[account] = shares_;
+    _totalShares = _totalShares.add(shares_);
+    emit PayeeAdded(account, shares_);
+  }
+}
+
 // File: Whitelist.sol
 contract Whitelist is Ownable {
     using SafeMath for uint256;
@@ -1994,6 +2108,7 @@ abstract contract RewardableERC721 is MultiGenERC721 {
 
     // Reward token
     REWARD_TOKEN public immutable _tickets;
+    uint256 TicketsMinted = 0;
 
     // Last timestamp at which token was used to claim
     mapping(uint256 => uint256) lastClaimTimeStamp;
@@ -2013,7 +2128,7 @@ abstract contract RewardableERC721 is MultiGenERC721 {
 
     // Only GEN0 tokens are Rewardable, only after GEN0 sold out
     function RewardableCanClaim(uint256 tokenId) public view returns(bool) {
-        return _get_gen()==1 && block.timestamp >= RewardableTimestamp(tokenId) && !_isGen0(tokenId) && ownerOf(tokenId) == _msgSender();
+        return _get_gen()==1 && block.timestamp >= RewardableTimestamp(tokenId) && !_isGen0(tokenId) && ownerOf(tokenId) == _msgSender() && TicketsMinted < GEN1_SUPPLY;
     }
 
     function _ClaimRewards(uint256 tokenId) internal {
@@ -2044,11 +2159,11 @@ pragma solidity ^0.8.12;
  * @title Moji Club contract
  * @dev Extends ERC721 Non-Fungible Token Standard basic implementation
  */
-contract MOJICLUB is RewardableERC721, Whitelist {
+contract MOJICLUB is RewardableERC721, Whitelist, PaymentSplitter {
     using SafeMath for uint256;
 
     // Mint price ; valid only for Gen0 trough
-    uint256 public constant PRICE_ETH = 0.09 ether; //0.09 ETH
+    uint256 public constant PRICE_ETH = 0.25 ether;
     uint256 public constant MAX_MINT = 1;
 
     bool private _SALE_PAUSED = false;
@@ -2057,22 +2172,18 @@ contract MOJICLUB is RewardableERC721, Whitelist {
     address _hash_signer = 0x76B9079C439a1beaf047eee9FBDf4608F7e12158;
     // Mapping containing URL for each NFT
     mapping(uint256 => string) private _mojiTokensUrls;
+    mapping(string => bool) private _mojiTokensUrlList;
     // Mapping containing base36 repr of all traits of each NFT
-    mapping(string => uint256) private _mojiTokensTraits;
-    // Because on how mapping works in Solidity, we need to store traits of token 0 in a separate var
-    string private _mojiTokensTraits0;
+    mapping(string => bool) private _mojiTokensTraits;
 
     // tickets_addr -> TICKETS contract address
-    constructor(address tickets_addr, uint256 _gen0supply, uint256 _gen1supply)
+    constructor(address tickets_addr, uint256 _gen0supply, uint256 _gen1supply, address[] memory _payees, uint256[] memory _shares)
         ERC721("Moji Club", "MJC")
         MultiGenERC721(_gen0supply, _gen1supply)
         RewardableERC721(tickets_addr)
+        PaymentSplitter(_payees, _shares)
     {
 
-    }
-
-    function MintedHash(string memory _hash) public view returns(bool) {
-        return _mojiTokensTraits[_hash] != 0 || keccak256(abi.encodePacked(_hash)) == keccak256(abi.encodePacked(_mojiTokensTraits0));
     }
 
     function flipSaleState() public onlyOwner {
@@ -2111,13 +2222,14 @@ contract MOJICLUB is RewardableERC721, Whitelist {
     }
 
     function mint(string[2] memory _msgs, bytes32[4] memory _hashs_r_s, uint8[2] memory _v, bytes32[] calldata _proof) public payable {
-        require(ecrecover(sha256(abi.encodePacked(_msgs[0])), _v[0], _hashs_r_s[0], _hashs_r_s[1]) == _hash_signer,"Fail1");
-        require(ecrecover(sha256(abi.encodePacked(_msgs[1])), _v[1], _hashs_r_s[2], _hashs_r_s[3]) == _hash_signer,"Fail2");
-        require(!MintedHash(_msgs[0]), "Fail3");
-        require(SaleIsActive(), "Fail4");
+        require(ecrecover(sha256(abi.encodePacked(_msgs[0])), _v[0], _hashs_r_s[0], _hashs_r_s[1]) == _hash_signer,"Wrong sign");
+        require(ecrecover(sha256(abi.encodePacked(_msgs[1])), _v[1], _hashs_r_s[2], _hashs_r_s[3]) == _hash_signer,"Wrong sign");
+        require(!_mojiTokensTraits[_msgs[0]], "Token exists");
+        require(!_mojiTokensUrlList[_msgs[1]], "Token exists");
+        require(SaleIsActive(), "Sale inactive");
         uint8 GEN = _get_gen();
-        require(_getGenFromHash(_msgs[0])==GEN,"Fail5");
-        require(totalSupply()<GEN1_SUPPLY,"Fail6");
+        require(_getGenFromHash(_msgs[0])==GEN,"GEN0 Soldout");
+        require(totalSupply()<GEN1_SUPPLY,"Soldout");
 
         bool Whistelisted = _hasWhitelist(_proof, _msgSender());
         bool FreeMint = _hasFreeMint(_proof, _msgSender());
@@ -2129,7 +2241,7 @@ contract MOJICLUB is RewardableERC721, Whitelist {
         
         if(GEN==0) {
 
-            // in Gen0, Non-FreeMint users have to send the correct amount of ETH to mint tokens
+            // in Gen0, Non-FreeMint users have to send the correct amount of ETH to mint a token
             if(!FreeMint){
                 require(PRICE_ETH <= msg.value, "Insufficient ETH");
             }
@@ -2164,10 +2276,8 @@ contract MOJICLUB is RewardableERC721, Whitelist {
         uint mintIndex = totalSupply();
         _safeMint(_msgSender(), mintIndex);
         _mojiTokensUrls[mintIndex] = _url_msg;
-        _mojiTokensTraits[_base36_msg] = mintIndex;
-        if(mintIndex==0){
-            _mojiTokensTraits0 = _base36_msg;
-        }
+        _mojiTokensUrlList[_url_msg] = true;
+        _mojiTokensTraits[_base36_msg] = true;
     }
 
     /**
