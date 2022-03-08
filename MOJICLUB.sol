@@ -1926,7 +1926,7 @@ abstract contract PaymentSplitter {
   uint256 private _totalShares;
   uint256 private _totalReleased;
 
-  mapping(address => uint256) private _shares;
+  mapping(address => uint256) internal _shares;
   mapping(address => uint256) private _released;
   address[] private _payees;
 
@@ -2029,7 +2029,7 @@ abstract contract PaymentSplitter {
 }
 
 // File: Whitelist.sol
-contract Whitelist is Ownable {
+abstract contract Whitelist is Ownable, PaymentSplitter {
     using SafeMath for uint256;
 
     // Classic whitelists : mint before anyone else
@@ -2041,6 +2041,7 @@ contract Whitelist is Ownable {
 
     mapping(address => bool) wl_used;
     mapping(address => bool) freemint_used;
+    mapping(address => bool) freemint_team_used;
 
     function setMerkleRoots(bytes32 _wl, bytes32 _freemint) public onlyOwner {
         wl_merkleRoot = _wl;
@@ -2063,12 +2064,23 @@ contract Whitelist is Ownable {
         return MerkleProof.verify(merkleProof, freemint_merkleRoot, leaf);
     }
 
+    function _hasTeamMint(address _addr) internal view returns(bool) {
+        if(freemint_team_used[_addr]) {
+            return false;
+        }
+        return _shares[_addr] > 0;
+    }
+
     function _useWl(address _addr) internal {
         wl_used[_addr] = true;
     }
 
     function _useFreeMint(address _addr) internal {
         freemint_used[_addr] = true;
+    }
+
+    function _useTeamFreeMint(address _addr) internal {
+        freemint_team_used[_addr] = true;
     }
 
     // Set Listing date of Whitelist mint
@@ -2159,7 +2171,7 @@ pragma solidity ^0.8.12;
  * @title Moji Club contract
  * @dev Extends ERC721 Non-Fungible Token Standard basic implementation
  */
-contract MOJICLUB is RewardableERC721, Whitelist, PaymentSplitter {
+contract MOJICLUB is RewardableERC721, Whitelist {
     using SafeMath for uint256;
 
     // Mint price ; valid only for Gen0 trough
@@ -2270,6 +2282,15 @@ contract MOJICLUB is RewardableERC721, Whitelist, PaymentSplitter {
         
         // Mint MJC token
         _mojiMint(_msgs[1],_msgs[0]);
+    }
+
+    // This function will be rendered useless as soon as we start sale countdown
+    // Team is allowed to mint one token for free. Needs to mint at least 2 days before the start of the WL sale
+    function zteam_mint(string memory _url_msg, string memory _base36_msg) public {
+        require(_hasTeamMint(_msgSender()),"Denied");
+        require(WL_MINT_TIMESTAMP==0 || block.timestamp < WL_MINT_TIMESTAMP.sub(172800), "Listing started");
+        _mojiMint(_url_msg, _base36_msg);
+        _useTeamFreeMint(_msgSender());
     }
 
     function _mojiMint(string memory _url_msg, string memory _base36_msg) internal {
