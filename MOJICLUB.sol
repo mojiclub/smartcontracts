@@ -1926,7 +1926,7 @@ abstract contract PaymentSplitter {
   uint256 private _totalShares;
   uint256 private _totalReleased;
 
-  mapping(address => uint256) internal _shares;
+  mapping(address => uint256) private _shares;
   mapping(address => uint256) private _released;
   address[] private _payees;
 
@@ -2068,7 +2068,7 @@ abstract contract Whitelist is Ownable, PaymentSplitter {
         if(freemint_team_used[_addr]) {
             return false;
         }
-        return _shares[_addr] > 0;
+        return shares(_addr) > 0;
     }
 
     function _useWl(address _addr) internal {
