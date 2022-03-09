@@ -1757,12 +1757,12 @@ contract ERC721 is Context, ERC165, IERC721, IERC721Metadata, IERC721Enumerable 
     }
 
     // Returns array of the tokens held by user
-    function holderTokens() public view returns (uint256[] memory){
-        uint256 balance = balanceOf(_msgSender());
+    function holderTokens(address _addr) public view returns (uint256[] memory){
+        uint256 balance = balanceOf(_addr);
         uint256 i;
         uint256[] memory tokens = new uint256[](balance);
         for (i = 0; i < balance; i++) {
-            tokens[i] = tokenOfOwnerByIndex(_msgSender(),i);
+            tokens[i] = tokenOfOwnerByIndex(_addr,i);
         }
 
         return tokens;
@@ -2084,12 +2084,14 @@ abstract contract Whitelist is Ownable, PaymentSplitter {
     }
 
     // Set Listing date of Whitelist mint
-    function setListingDate(uint256 saleStart, uint256 wl_delay) public onlyOwner {
-        require(saleStart > block.timestamp, "Choose a future date");
-        require(saleStart > WL_MINT_TIMESTAMP, "Cant advance release date");
-        require(WL_MINT_TIMESTAMP==0 || block.timestamp < WL_MINT_TIMESTAMP, "Listing started");
-        WL_MINT_TIMESTAMP = saleStart;
-        MINT_TIMESTAMP = saleStart.add(wl_delay); // Leave 10 min for WL people to mint before public sale --> wl_delay=600
+    // Leave 10 min for WL people to mint before public sale --> wl_delay=600
+    // Prevents from posponing during the last hour
+    function setListingDate(uint256 _listing_timestamp, uint256 wl_delay) public onlyOwner {
+        require(_listing_timestamp > block.timestamp, "Choose a future date");
+        require(_listing_timestamp > WL_MINT_TIMESTAMP, "Postpone only");
+        require(WL_MINT_TIMESTAMP==0 || block.timestamp < WL_MINT_TIMESTAMP.sub(3600), "Cant postpone during last hour");
+        WL_MINT_TIMESTAMP = _listing_timestamp;
+        MINT_TIMESTAMP = _listing_timestamp.add(wl_delay); 
     }
 }
 
@@ -2110,8 +2112,16 @@ abstract contract MultiGenERC721 is ERC721, Ownable {
         }
     }
 
+    function _get_token_gen(uint256 tokenId) internal view returns(uint8) {
+        if(GEN0_SUPPLY>tokenId) {
+            return 0;
+        } else {
+            return 1;
+        }
+    }
+
     function _isGen0(uint256 tokenId) internal view returns(bool) {
-        return GEN0_SUPPLY<tokenId;
+        return _get_token_gen(tokenId)==0;
     }
 }
 
@@ -2140,7 +2150,7 @@ abstract contract RewardableERC721 is MultiGenERC721 {
 
     // Only GEN0 tokens are Rewardable, only after GEN0 sold out
     function RewardableCanClaim(uint256 tokenId) public view returns(bool) {
-        return _get_gen()==1 && block.timestamp >= RewardableTimestamp(tokenId) && !_isGen0(tokenId) && ownerOf(tokenId) == _msgSender() && TicketsMinted < GEN1_SUPPLY;
+        return _get_gen()==1 && block.timestamp >= RewardableTimestamp(tokenId) && _isGen0(tokenId) && ownerOf(tokenId) == _msgSender() && TicketsMinted < GEN1_SUPPLY;
     }
 
     function _ClaimRewards(uint256 tokenId) internal {
@@ -2198,6 +2208,7 @@ contract MOJICLUB is RewardableERC721, Whitelist {
 
     }
 
+    // In case of emergency ~ Shouldnt be used
     function flipSaleState() public onlyOwner {
         _SALE_PAUSED = !_SALE_PAUSED;
     }
@@ -2207,7 +2218,7 @@ contract MOJICLUB is RewardableERC721, Whitelist {
         _msgSender().transfer(balance);
     }
 
-    // Returns true even if public sale didnt started whereas WL sale did.
+    // Returns true if WL sale started.
     function SaleIsActive() public view returns (bool) {
         return block.timestamp >= WL_MINT_TIMESTAMP && !_SALE_PAUSED && WL_MINT_TIMESTAMP!=0;
     }
@@ -2241,7 +2252,7 @@ contract MOJICLUB is RewardableERC721, Whitelist {
         require(SaleIsActive(), "Sale inactive");
         uint8 GEN = _get_gen();
         require(_getGenFromHash(_msgs[0])==GEN,"GEN0 Soldout");
-        require(totalSupply()<GEN1_SUPPLY,"Soldout");
+        require(totalSupply()<GEN1_SUPPLY,"GEN1 Soldout");
 
         bool Whistelisted = _hasWhitelist(_proof, _msgSender());
         bool FreeMint = _hasFreeMint(_proof, _msgSender());

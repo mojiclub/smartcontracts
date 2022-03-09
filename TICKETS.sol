@@ -1923,7 +1923,6 @@ contract TICKETS is ERC721, Ownable {
         _setBaseURI(_uri);
     }
 
-    // Caller ensures the smart contracts can only be called/written by one address (_callerAddr)
     modifier onlyCaller() {
         require(_isCaller() && _callerAddr != address(0), "Not caller");
         _;
@@ -1934,8 +1933,9 @@ contract TICKETS is ERC721, Ownable {
         return _callerAddr == _msgSender();
     }
 
-    // Holding a TICKETS token gives right to mint a MOJI CLUB.
-    // Can only be set once.
+    // Caller ensures the smart contracts can only be written by one address (_callerAddr)
+    // Set it with a trusted contract address. Once _callerAddr is set, it cannot be modified.
+    // So, use of the contract (mint, burn) is controled exclusively by a trusted contract.
     function setCallerAddr() public {
         require(_callerAddr == address(0), "Caller set already");
         _callerAddr = _msgSender();
