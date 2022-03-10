@@ -1943,7 +1943,7 @@ contract TICKETS is ERC721, Ownable {
 
     // All NFTs will have the same URI, so lets override the tokenURI to always return baseURI
     function tokenURI(uint256 tokenId) public view override returns (string memory) {
-        return baseURI();
+        return string(abi.encodePacked("ipfs://", baseURI()));
     }
 
     /**

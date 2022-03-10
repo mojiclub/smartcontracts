@@ -2104,7 +2104,7 @@ abstract contract MultiGenERC721 is ERC721, Ownable {
         GEN1_SUPPLY = _gen1supply;
     }
 
-    function _get_gen() internal view returns(uint8) {
+    function CURRENT_GEN() internal view returns(uint8) {
         if(totalSupply()<GEN0_SUPPLY) {
             return 0;
         } else {
@@ -2112,7 +2112,7 @@ abstract contract MultiGenERC721 is ERC721, Ownable {
         }
     }
 
-    function _get_token_gen(uint256 tokenId) internal view returns(uint8) {
+    function TokenGen(uint256 tokenId) public view returns(uint8) {
         if(GEN0_SUPPLY>tokenId) {
             return 0;
         } else {
@@ -2121,7 +2121,7 @@ abstract contract MultiGenERC721 is ERC721, Ownable {
     }
 
     function _isGen0(uint256 tokenId) internal view returns(bool) {
-        return _get_token_gen(tokenId)==0;
+        return TokenGen(tokenId)==0;
     }
 }
 
@@ -2149,12 +2149,14 @@ abstract contract RewardableERC721 is MultiGenERC721 {
     }
 
     // Only GEN0 tokens are Rewardable, only after GEN0 sold out
-    function RewardableCanClaim(uint256 tokenId) public view returns(bool) {
-        return _get_gen()==1 && block.timestamp >= RewardableTimestamp(tokenId) && _isGen0(tokenId) && ownerOf(tokenId) == _msgSender() && TicketsMinted < GEN1_SUPPLY;
+    function EligibleToClaim(uint256 tokenId) public view returns(bool) {
+        return CURRENT_GEN()==1 && _isGen0(tokenId) && TicketsMinted < GEN1_SUPPLY;
     }
 
     function _ClaimRewards(uint256 tokenId) internal {
-        require(RewardableCanClaim(tokenId),"Cant claim");
+        require(EligibleToClaim(tokenId),"Cant claim");
+        require(ownerOf(tokenId) == _msgSender(),"Not owner");
+        require(block.timestamp >= RewardableTimestamp(tokenId),"Cant claim");
         lastClaimTimeStamp[tokenId] = block.timestamp;
     }
 
@@ -2168,8 +2170,8 @@ abstract contract RewardableERC721 is MultiGenERC721 {
     function ClaimTickets(uint256[] memory tokenIds) public {
         for (uint i = 0; i < tokenIds.length; i++) {
             _ClaimRewards(tokenIds[i]);
+            _tickets.mintTicket(_msgSender(),1);
         }
-        _tickets.mintTicket(_msgSender(),tokenIds.length);
     }
 }
 
@@ -2250,7 +2252,7 @@ contract MOJICLUB is RewardableERC721, Whitelist {
         require(!_mojiTokensTraits[_msgs[0]], "Token exists");
         require(!_mojiTokensUrlList[_msgs[1]], "Token exists");
         require(SaleIsActive(), "Sale inactive");
-        uint8 GEN = _get_gen();
+        uint8 GEN = CURRENT_GEN();
         require(_getGenFromHash(_msgs[0])==GEN,"GEN0 Soldout");
         require(totalSupply()<GEN1_SUPPLY,"GEN1 Soldout");
 
@@ -2259,7 +2261,7 @@ contract MOJICLUB is RewardableERC721, Whitelist {
 
         // Only allow whitelisted addresses to mint during presale
         if(block.timestamp < MINT_TIMESTAMP) {
-            require(Whistelisted || FreeMint, "Not whitelisted");
+            require(Whistelisted || FreeMint, "Not whitelisted or used");
         }
         
         if(GEN==0) {
