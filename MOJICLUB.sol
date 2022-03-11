@@ -2098,10 +2098,12 @@ abstract contract Whitelist is Ownable, PaymentSplitter {
 abstract contract MultiGenERC721 is ERC721, Ownable {
     uint256 public immutable GEN0_SUPPLY;
     uint256 public immutable GEN1_SUPPLY;
+    uint256 public immutable ALL_GEN_SUPPLY;
 
     constructor(uint256 _gen0supply, uint256 _gen1supply) {
         GEN0_SUPPLY = _gen0supply;
         GEN1_SUPPLY = _gen1supply;
+        ALL_GEN_SUPPLY = GEN0_SUPPLY + GEN1_SUPPLY;
     }
 
     function CURRENT_GEN() internal view returns(uint8) {
@@ -2254,7 +2256,7 @@ contract MOJICLUB is RewardableERC721, Whitelist {
         require(SaleIsActive(), "Sale inactive");
         uint8 GEN = CURRENT_GEN();
         require(_getGenFromHash(_msgs[0])==GEN,"GEN0 Soldout");
-        require(totalSupply()<GEN1_SUPPLY,"GEN1 Soldout");
+        require(totalSupply()<ALL_GEN_SUPPLY,"GEN1 Soldout");
 
         bool Whistelisted = _hasWhitelist(_proof, _msgSender());
         bool FreeMint = _hasFreeMint(_proof, _msgSender());
@@ -2265,7 +2267,6 @@ contract MOJICLUB is RewardableERC721, Whitelist {
         }
         
         if(GEN==0) {
-
             // in Gen0, Non-FreeMint users have to send the correct amount of ETH to mint a token
             if(!FreeMint){
                 require(PRICE_ETH <= msg.value, "Insufficient ETH");
