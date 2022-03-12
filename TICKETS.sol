@@ -1966,7 +1966,7 @@ contract TICKETS is ERC721, Ownable {
         require(balanceOf(holder)>=amount, "Insufficient balance");
         for(uint i = 0; i < amount; i++) {
             uint256 tokenId = tokenOfOwnerByIndex(holder,0);
-            _burn(tokenId);
+            _transfer(holder,address(this),tokenId);
         }
     }
 

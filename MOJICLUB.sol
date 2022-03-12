@@ -2173,6 +2173,7 @@ abstract contract RewardableERC721 is MultiGenERC721 {
         for (uint i = 0; i < tokenIds.length; i++) {
             _ClaimRewards(tokenIds[i]);
             _tickets.mintTicket(_msgSender(),1);
+            TicketsMinted.add(1);
         }
     }
 }
