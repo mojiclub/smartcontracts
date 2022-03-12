@@ -1912,6 +1912,8 @@ pragma solidity ^0.8.12;
 contract TICKETS is ERC721, Ownable {
     using SafeMath for uint256;
 
+    event Mint(address indexed to, uint256 indexed amount);
+
     /** 
      * Holding a TICKETS token gives right to mint a token of another ERC721 contract. 
      * This other ERC721 contract has been deployed with an interface who has an address.
@@ -1954,6 +1956,7 @@ contract TICKETS is ERC721, Ownable {
             uint256 mintIndex = totalSupply();
             _safeMint(to, mintIndex);
         }
+        emit Mint(to, numberOfTokens);
     }
 
     /**
@@ -1965,5 +1968,11 @@ contract TICKETS is ERC721, Ownable {
             uint256 tokenId = tokenOfOwnerByIndex(holder,0);
             _burn(tokenId);
         }
+    }
+
+    // Shouldnt be used but we never know
+    function withdraw() public onlyOwner {
+        uint balance = address(this).balance;
+        _msgSender().transfer(balance);
     }
 }

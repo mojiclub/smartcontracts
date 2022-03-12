@@ -2188,8 +2188,10 @@ pragma solidity ^0.8.12;
 contract MOJICLUB is RewardableERC721, Whitelist {
     using SafeMath for uint256;
 
+    event Mint(address indexed to, uint256 indexed tokenId);
+
     // Mint price ; valid only for Gen0 trough
-    uint256 public constant PRICE_ETH = 0.25 ether;
+    uint256 public constant PRICE_ETH = 0.01 ether;//0.25 ether; TODO : change
     uint256 public constant MAX_MINT = 1;
 
     bool private _SALE_PAUSED = false;
@@ -2310,6 +2312,7 @@ contract MOJICLUB is RewardableERC721, Whitelist {
     function _mojiMint(string memory _url_msg, string memory _base36_msg) internal {
         uint mintIndex = totalSupply();
         _safeMint(_msgSender(), mintIndex);
+        emit Mint(_msgSender(), mintIndex);
         _mojiTokensUrls[mintIndex] = _url_msg;
         _mojiTokensUrlList[_url_msg] = true;
         _mojiTokensTraits[_base36_msg] = true;
