@@ -2130,6 +2130,11 @@ abstract contract MultiGenERC721 is ERC721, Ownable {
 abstract contract RewardableERC721 is MultiGenERC721 {
     using SafeMath for uint256;
 
+    modifier noBots() {
+        require(tx.origin == _msgSender(), "No Bots");
+        _;
+    }
+
     // Reward token
     REWARD_TOKEN public immutable _tickets;
     uint256 TicketsMinted = 0;
@@ -2169,7 +2174,7 @@ abstract contract RewardableERC721 is MultiGenERC721 {
 
     // Mints tickets if NFTs gives right for a free ticket
     // TODO : tableau d'int en argument
-    function ClaimTickets(uint256[] memory tokenIds) public {
+    function ClaimTickets(uint256[] memory tokenIds) public noBots {
         for (uint i = 0; i < tokenIds.length; i++) {
             _ClaimRewards(tokenIds[i]);
             TicketsMinted.add(1);
@@ -2178,7 +2183,7 @@ abstract contract RewardableERC721 is MultiGenERC721 {
     }
 }
 
-// File: contracts/BoredApeYachtClub.sol
+// File: contracts/MOJICLUB.sol
 
 pragma solidity ^0.8.12;
 
@@ -2251,7 +2256,7 @@ contract MOJICLUB is RewardableERC721, Whitelist {
         return 1;
     }
 
-    function mint(string[2] memory _msgs, bytes32[4] memory _hashs_r_s, uint8[2] memory _v, bytes32[] calldata _proof) public payable {
+    function mint(string[2] memory _msgs, bytes32[4] memory _hashs_r_s, uint8[2] memory _v, bytes32[] calldata _proof) public payable noBots {
         require(ecrecover(sha256(abi.encodePacked(_msgs[0])), _v[0], _hashs_r_s[0], _hashs_r_s[1]) == _hash_signer,"Wrong sign");
         require(ecrecover(sha256(abi.encodePacked(_msgs[1])), _v[1], _hashs_r_s[2], _hashs_r_s[3]) == _hash_signer,"Wrong sign");
         require(!_mojiTokensTraits[_msgs[0]], "Token exists");
@@ -2303,7 +2308,7 @@ contract MOJICLUB is RewardableERC721, Whitelist {
 
     // This function will be rendered useless as soon as we start sale countdown
     // Team is allowed to mint one token for free. Needs to mint at least 2 days before the start of the WL sale
-    function zteam_mint(string memory _url_msg, string memory _base36_msg) public {
+    function TeamMint(string memory _url_msg, string memory _base36_msg) public {
         require(_hasTeamMint(_msgSender()),"Denied");
         require(WL_MINT_TIMESTAMP==0 || block.timestamp < WL_MINT_TIMESTAMP.sub(172800), "Listing started");
         _mojiMint(_url_msg, _base36_msg);
