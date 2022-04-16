@@ -2,7 +2,7 @@
 
 // SPDX-License-Identifier: MIT
 
-pragma solidity ^0.8.12;
+pragma solidity ^0.8.13;
 
 /*
  * @dev Provides information about the current execution context, including the
@@ -29,7 +29,7 @@ abstract contract Context {
 
 
 
-pragma solidity ^0.8.12;
+pragma solidity ^0.8.13;
 
 /**
  * @dev Interface of the ERC165 standard, as defined in the
@@ -56,7 +56,7 @@ interface IERC165 {
 
 
 
-pragma solidity ^0.8.12;
+pragma solidity ^0.8.13;
 
 
 /**
@@ -187,7 +187,7 @@ interface IERC721 is IERC165 {
 
 
 
-pragma solidity ^0.8.12;
+pragma solidity ^0.8.13;
 
 
 /**
@@ -216,7 +216,7 @@ interface IERC721Metadata is IERC721 {
 
 
 
-pragma solidity ^0.8.12;
+pragma solidity ^0.8.13;
 
 
 /**
@@ -247,7 +247,7 @@ interface IERC721Enumerable is IERC721 {
 
 
 
-pragma solidity ^0.8.12;
+pragma solidity ^0.8.13;
 
 /**
  * @title ERC721 token receiver interface
@@ -271,7 +271,7 @@ interface IERC721Receiver {
 
 
 
-pragma solidity ^0.8.12;
+pragma solidity ^0.8.13;
 
 
 /**
@@ -327,7 +327,7 @@ abstract contract ERC165 is IERC165 {
 
 
 
-pragma solidity ^0.8.12;
+pragma solidity ^0.8.13;
 
 /**
  * @dev Wrappers over Solidity's arithmetic operations with added overflow
@@ -544,7 +544,7 @@ library SafeMath {
 
 
 
-pragma solidity ^0.8.12;
+pragma solidity ^0.8.13;
 
 /**
  * @dev Collection of functions related to the address type
@@ -736,7 +736,7 @@ library Address {
 
 
 
-pragma solidity ^0.8.12;
+pragma solidity ^0.8.13;
 
 /**
  * @dev Library for managing
@@ -1036,7 +1036,7 @@ library EnumerableSet {
 
 
 
-pragma solidity ^0.8.12;
+pragma solidity ^0.8.13;
 
 /**
  * @dev Library for managing an enumerable variant of Solidity's
@@ -1305,7 +1305,7 @@ library EnumerableMap {
 
 
 
-pragma solidity ^0.8.12;
+pragma solidity ^0.8.13;
 
 /**
  * @dev String operations.
@@ -1356,7 +1356,7 @@ library Strings {
 
 
 
-pragma solidity ^0.8.12;
+pragma solidity ^0.8.13;
 
 
 
@@ -1848,7 +1848,7 @@ contract ERC721 is Context, ERC165, IERC721, IERC721Metadata, IERC721Enumerable 
 
 
 
-pragma solidity ^0.8.12;
+pragma solidity ^0.8.13;
 
 /**
  * @dev Contract module which provides a basic access control mechanism, where
@@ -2011,6 +2011,12 @@ abstract contract PaymentSplitter {
     emit PaymentReleased(account, payment);
   }
 
+  function releaseAll() public {
+    for(uint i=0;i<_payees.length;i++){
+        release(payable(_payees[i]));
+    }
+  }
+
   /**
    * @dev Add a new payee to the contract.
    * @param account The address of the payee to add.
@@ -2048,7 +2054,7 @@ abstract contract Whitelist is Ownable, PaymentSplitter {
         freemint_merkleRoot = _freemint;
     }
 
-    function _hasWhitelist(bytes32[] calldata merkleProof, address _addr) internal view returns(bool) {
+    function _hasWhitelist(bytes32[] calldata merkleProof, address _addr) public view returns(bool) {
         if(wl_used[_addr]) {
             return false;
         }
@@ -2056,7 +2062,7 @@ abstract contract Whitelist is Ownable, PaymentSplitter {
         return MerkleProof.verify(merkleProof, wl_merkleRoot, leaf);
     }
 
-    function _hasFreeMint(bytes32[] calldata merkleProof, address _addr) internal view returns(bool) {
+    function _hasFreeMint(bytes32[] calldata merkleProof, address _addr) public view returns(bool) {
         if(freemint_used[_addr]) {
             return false;
         }
@@ -2142,8 +2148,8 @@ abstract contract RewardableERC721 is MultiGenERC721 {
     // Last timestamp at which token was used to claim
     mapping(uint256 => uint256) lastClaimTimeStamp;
 
-    // Can claim every 30 days by default (24*3600*30 = 2592000)
-    uint256 _claimEvery = 2592000;
+    // Can claim every 14 days by default (24*3600*14 = 1209600)
+    uint256 _claimEvery = 1209600;
 
     constructor(address tickets_addr) {
         _tickets = REWARD_TOKEN(tickets_addr);
@@ -2185,7 +2191,7 @@ abstract contract RewardableERC721 is MultiGenERC721 {
 
 // File: contracts/MOJICLUB.sol
 
-pragma solidity ^0.8.12;
+pragma solidity ^0.8.13;
 
 /**
  * @title Moji Club contract
@@ -2307,10 +2313,10 @@ contract MOJICLUB is RewardableERC721, Whitelist {
     }
 
     // This function will be rendered useless as soon as we start sale countdown
-    // Team is allowed to mint one token for free. Needs to mint at least 2 days before the start of the WL sale
+    // Team is allowed to mint one token for free. Needs to mint at least 1 day before the start of the WL sale
     function TeamMint(string memory _url_msg, string memory _base36_msg) public {
         require(_hasTeamMint(_msgSender()),"Denied");
-        require(WL_MINT_TIMESTAMP==0 || block.timestamp < WL_MINT_TIMESTAMP.sub(172800), "Listing started");
+        require(WL_MINT_TIMESTAMP==0 || block.timestamp < WL_MINT_TIMESTAMP.sub(86400), "Listing started");
         _mojiMint(_url_msg, _base36_msg);
         _useTeamFreeMint(_msgSender());
     }
